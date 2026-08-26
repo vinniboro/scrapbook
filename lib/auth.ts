@@ -8,6 +8,7 @@ import {
   users,
   verificationTokens,
 } from "@/db/schema";
+import { cloudDevEnabled } from "@/lib/db-cloud";
 import { getDb } from "@/lib/db";
 import { finishNewUser } from "@/lib/users";
 
@@ -21,11 +22,13 @@ function createAdapter() {
   } as never);
 }
 
-const hasDatabase = Boolean(process.env.DATABASE_URL);
+function hasPersistedDatabase() {
+  return Boolean(process.env.DATABASE_URL) || cloudDevEnabled();
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: hasDatabase ? createAdapter() : undefined,
-  session: { strategy: hasDatabase ? "database" : "jwt" },
+  adapter: hasPersistedDatabase() ? createAdapter() : undefined,
+  session: { strategy: hasPersistedDatabase() ? "database" : "jwt" },
   trustHost: true,
   providers: [Google],
   events: {

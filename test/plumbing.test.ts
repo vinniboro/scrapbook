@@ -3,13 +3,20 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { connectUsers, disconnectUsers, relationTo } from "@/lib/connections";
 import {
+  enforceMintRateLimit,
+  enforceScrapCreateRateLimit,
   hashToken,
   mintConnectToken,
+  MINT_MAX_PER_BUCKET,
+  REDEEM_MAX_PER_BUCKET,
   redeemToken,
   TOKEN_TTL_MS,
 } from "@/lib/connect";
 import {
+  BadCursorError,
   createScrap,
+  decodeCursor,
+  deleteScrap,
   getScrapForViewer,
   getScrapImage,
   listTimeline,
@@ -17,9 +24,14 @@ import {
   memoryImageStore,
   PAGE_SIZE,
   resetMemoryImageStore,
+  updateScrap,
 } from "@/lib/scraps";
 import { textScrapSchema } from "@/lib/schemas";
+import { validateImageInput } from "@/lib/upload";
+import { finishNewUser } from "@/lib/users";
 import { canViewScrap } from "@/lib/visibility";
+import { eq } from "drizzle-orm";
+import { users } from "@/db/schema";
 import { createTestDb, insertUser } from "./helpers";
 
 afterEach(() => {
@@ -291,6 +303,215 @@ describe("plumbing", () => {
       expect(second.scraps.every((scrap) => scrap.visibility === "public")).toBe(true);
       expect(second.nextCursor).toBeNull();
       expect(second.scraps.some((scrap) => scrap.body?.startsWith("private-"))).toBe(false);
+    } finally {
+      await close();
+    }
+  });
+
+  it("allows only one concurrent redeem of the same QR token", async () => {
+    const { db, close } = await createTestDb();
+    try {
+      const host = await insertUser(db, { handle: "host", email: "host@example.com" });
+      const guestA = await insertUser(db, {
+        handle: "guest-a",
+        email: "guest-a@example.com",
+        onboarded: false,
+      });
+      const guestB = await insertUser(db, {
+        handle: "guest-b",
+        email: "guest-b@example.com",
+        onboarded: false,
+      });
+      const token = await mintConnectToken(db, host);
+
+      const [first, second] = await Promise.all([
+        redeemToken(db, { viewerId: guestA, token, ip: "10.0.0.1" }),
+        redeemToken(db, { viewerId: guestB, token, ip: "10.0.0.2" }),
+      ]);
+
+      const winners = [first, second].filter((result) => result.ok);
+      expect(winners).toHaveLength(1);
+      expect(winners[0]).toEqual({ ok: true, otherUserId: host });
+    } finally {
+      await close();
+    }
+  });
+
+  it("deletes image blobs when a scrap is removed", async () => {
+    const { db, close } = await createTestDb();
+    try {
+      const author = await insertUser(db, {
+        handle: "author",
+        email: "author@example.com",
+      });
+      const photo = await createScrap(
+        db,
+        author,
+        {
+          type: "image",
+          visibility: "private",
+          bytes: Buffer.from("delete-me"),
+          contentType: "image/png",
+        },
+        memoryImageStore,
+      );
+      expect(photo.blobPathname).toBeTruthy();
+      expect(await memoryImageStore.get(photo.blobPathname!)).not.toBeNull();
+
+      const deleted = await deleteScrap(db, author, photo.id, memoryImageStore);
+      expect(deleted).toBe(true);
+      expect(await memoryImageStore.get(photo.blobPathname!)).toBeNull();
+    } finally {
+      await close();
+    }
+  });
+
+  it("rejects unsupported or oversized images through the shared gate", () => {
+    expect(
+      validateImageInput({
+        contentType: "application/pdf",
+        size: 1024,
+      }),
+    ).toBe("unsupported");
+    expect(
+      validateImageInput({
+        contentType: "image/png",
+        size: 9 * 1024 * 1024,
+      }),
+    ).toBe("too_large");
+    expect(
+      validateImageInput({
+        contentType: "image/png",
+        size: 1024,
+      }),
+    ).toBeNull();
+  });
+
+  it("throws BadCursorError for malformed cursors", async () => {
+    expect(() => decodeCursor("not-a-cursor")).toThrow(BadCursorError);
+    const { db, close } = await createTestDb();
+    try {
+      const viewer = await insertUser(db, {
+        handle: "viewer",
+        email: "viewer@example.com",
+      });
+      await expect(listTimeline(db, viewer, "bad-cursor")).rejects.toThrow(
+        BadCursorError,
+      );
+    } finally {
+      await close();
+    }
+  });
+
+  it("returns rate_limit when redeem attempts exceed the bucket", async () => {
+    const { db, close } = await createTestDb();
+    try {
+      const host = await insertUser(db, { handle: "host", email: "host@example.com" });
+      const guest = await insertUser(db, {
+        handle: "guest",
+        email: "guest@example.com",
+        onboarded: false,
+      });
+
+      for (let i = 0; i < REDEEM_MAX_PER_BUCKET; i += 1) {
+        const token = await mintConnectToken(db, host);
+        await redeemToken(db, {
+          viewerId: guest,
+          token,
+          ip: `3.3.3.${i}`,
+        });
+      }
+
+      const blocked = await redeemToken(db, {
+        viewerId: guest,
+        token: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ip: "3.3.3.99",
+      });
+      expect(blocked).toEqual({ ok: false, code: "rate_limit" });
+    } finally {
+      await close();
+    }
+  });
+
+  it("rate-limits QR mint and scrap create buckets", async () => {
+    const { db, close } = await createTestDb();
+    try {
+      const member = await insertUser(db, {
+        handle: "member",
+        email: "member@example.com",
+      });
+
+      for (let i = 0; i < MINT_MAX_PER_BUCKET; i += 1) {
+        expect(await enforceMintRateLimit(db, member, `4.4.4.${i}`)).toBe(true);
+      }
+      expect(await enforceMintRateLimit(db, member, "4.4.4.99")).toBe(false);
+
+      for (let i = 0; i < 40; i += 1) {
+        expect(
+          await enforceScrapCreateRateLimit(db, member, `5.5.5.${i}`),
+        ).toBe(true);
+      }
+      expect(await enforceScrapCreateRateLimit(db, member, "5.5.5.99")).toBe(
+        false,
+      );
+    } finally {
+      await close();
+    }
+  });
+
+  it("lets only the author patch or delete a scrap", async () => {
+    const { db, close } = await createTestDb();
+    try {
+      const author = await insertUser(db, {
+        handle: "author",
+        email: "author@example.com",
+      });
+      const other = await insertUser(db, {
+        handle: "other",
+        email: "other@example.com",
+      });
+      const scrap = await createScrap(
+        db,
+        author,
+        { type: "text", visibility: "public", body: "mine" },
+        memoryImageStore,
+      );
+
+      expect(
+        await updateScrap(db, author, scrap.id, { body: "updated" }),
+      ).toBeTruthy();
+      expect(await updateScrap(db, other, scrap.id, { body: "stolen" })).toBeNull();
+      expect(await deleteScrap(db, other, scrap.id, memoryImageStore)).toBe(false);
+      expect(await deleteScrap(db, author, scrap.id, memoryImageStore)).toBe(true);
+    } finally {
+      await close();
+    }
+  });
+
+  it("onboards the genesis email without a scan", async () => {
+    const { db, close } = await createTestDb();
+    try {
+      const genesisEmail = "genesis@example.com";
+      const previous = process.env.AUTH_GENESIS_EMAIL;
+      process.env.AUTH_GENESIS_EMAIL = genesisEmail;
+      const userId = crypto.randomUUID();
+      await db.insert(users).values({
+        id: userId,
+        email: genesisEmail,
+        name: "Genesis",
+      });
+      await finishNewUser(db, {
+        id: userId,
+        name: "Genesis",
+        email: genesisEmail,
+      });
+      const [row] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, userId));
+      expect(row?.onboardedAt).toBeTruthy();
+      expect(row?.handle).toBeTruthy();
+      process.env.AUTH_GENESIS_EMAIL = previous;
     } finally {
       await close();
     }

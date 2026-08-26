@@ -1,21 +1,19 @@
 import { getImageStore } from "@/lib/blob";
-import { jsonError, requireMember } from "@/lib/http";
+import { jsonError, requireMember, requestIp } from "@/lib/http";
 import { createScrap, serializeScrap } from "@/lib/scraps";
 import { imageMetaSchema, textScrapSchema } from "@/lib/schemas";
+import { enforceScrapCreateRateLimit } from "@/lib/connect";
+import { validateImageFile } from "@/lib/upload";
 
 export const runtime = "nodejs";
-
-const ALLOWED_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-]);
-const MAX_BYTES = 8 * 1024 * 1024;
 
 export async function POST(request: Request) {
   const member = await requireMember();
   if (!member.ok) return member.error;
+  const ip = requestIp(request);
+  if (!(await enforceScrapCreateRateLimit(member.db, member.userId, ip))) {
+    return jsonError(429, "rate_limit");
+  }
 
   const contentType = request.headers.get("content-type") ?? "";
 
@@ -31,8 +29,10 @@ export async function POST(request: Request) {
     }
     const file = form.get("file");
     if (!(file instanceof File)) return jsonError(400, "file required");
-    if (!ALLOWED_TYPES.has(file.type)) return jsonError(400, "unsupported image");
-    if (file.size > MAX_BYTES) return jsonError(400, "file too large");
+    const imageError = validateImageFile(file);
+    if (imageError === "unsupported") return jsonError(400, "unsupported image");
+    if (imageError === "too_large") return jsonError(400, "file too large");
+    if (imageError === "missing") return jsonError(400, "file required");
     const bytes = Buffer.from(await file.arrayBuffer());
     const scrap = await createScrap(
       member.db,

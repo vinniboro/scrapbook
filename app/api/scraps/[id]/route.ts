@@ -1,3 +1,4 @@
+import { getImageStore } from "@/lib/blob";
 import { jsonError, requireMember, requireSession } from "@/lib/http";
 import {
   deleteScrap,
@@ -42,7 +43,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
   const member = await requireMember();
   if (!member.ok) return member.error;
   const { id } = await context.params;
-  const ok = await deleteScrap(member.db, member.userId, id);
+  const ok = await deleteScrap(member.db, member.userId, id, getImageStore());
   if (!ok) return jsonError(404, "not found");
   return new Response(null, { status: 204 });
 }

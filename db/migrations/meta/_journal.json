@@ -8,6 +8,13 @@
       "when": 1787654489389,
       "tag": "0000_petite_tigra",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787742321790,
+      "tag": "0001_naive_otto_octavius",
+      "breakpoints": true
     }
   ]
 }
