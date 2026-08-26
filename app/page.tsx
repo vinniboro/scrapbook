@@ -13,6 +13,9 @@ export default async function HomePage() {
         >
           <button type="submit">Continue with Google</button>
         </form>
+        <p>
+          <a href="/worth">the manifesto</a>
+        </p>
       </main>
     );
   }
