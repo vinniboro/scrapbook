@@ -1,6 +1,9 @@
 import type { AdapterAccountType } from "next-auth/adapters";
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
+  index,
   integer,
   pgTable,
   primaryKey,
@@ -101,6 +104,7 @@ export const connections = pgTable(
   },
   (table) => [
     primaryKey({ columns: [table.userAId, table.userBId] }),
+    check("connections_ordered", sql`${table.userAId} < ${table.userBId}`),
   ],
 );
 
@@ -118,29 +122,52 @@ export const connectTokens = pgTable(
     consumedAt: timestamp("consumed_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
   },
+  (table) => [index("connect_tokens_user_id_idx").on(table.userId)],
 );
 
-export const scraps = pgTable("scraps", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  authorId: text("author_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  type: text("type").$type<"text" | "image">().notNull(),
-  visibility: text("visibility").$type<"public" | "private">().notNull(),
-  body: text("body"),
-  blobPathname: text("blob_pathname"),
-  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
-});
+export const scraps = pgTable(
+  "scraps",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    authorId: text("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: text("type").$type<"text" | "image">().notNull(),
+    visibility: text("visibility").$type<"public" | "private">().notNull(),
+    body: text("body"),
+    blobPathname: text("blob_pathname"),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => [
+    check("scraps_type_check", sql`${table.type} in ('text', 'image')`),
+    check(
+      "scraps_visibility_check",
+      sql`${table.visibility} in ('public', 'private')`,
+    ),
+    index("scraps_author_created_idx").on(
+      table.authorId,
+      table.createdAt,
+      table.id,
+    ),
+    index("scraps_created_idx").on(table.createdAt, table.id),
+  ],
+);
 
-export const redeemAttempts = pgTable("redeem_attempts", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  bucket: text("bucket").notNull(),
-  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
-});
+export const redeemAttempts = pgTable(
+  "redeem_attempts",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    bucket: text("bucket").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("redeem_attempts_bucket_created_idx").on(table.bucket, table.createdAt),
+  ],
+);
 
 export const schema = {
   users,

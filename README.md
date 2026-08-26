@@ -11,4 +11,14 @@ Exclusive QR connections. Per-scrap place: `room` (next room) or `close` (people
 
 ## Env
 
-See `.env.example`. Vercel: Neon `DATABASE_URL`, Auth.js `AUTH_SECRET` `AUTH_GOOGLE_ID` `AUTH_GOOGLE_SECRET` `AUTH_URL` `AUTH_GENESIS_EMAIL`, private Blob `BLOB_READ_WRITE_TOKEN` or OIDC.
+See `.env.example`.
+
+**Vercel / production:** Neon `DATABASE_URL`, Auth.js `AUTH_SECRET` `AUTH_GOOGLE_ID` `AUTH_GOOGLE_SECRET` `AUTH_URL`, private Blob `BLOB_READ_WRITE_TOKEN` or `BLOB_STORE_ID`.
+
+**Genesis bootstrap:** Set `AUTH_GENESIS_EMAIL` to the Google account that should be the first member. That user is onboarded on sign-up and can mint QR codes at `/qr`. Everyone else must scan a QR before they can mint or post — there is no directory or search.
+
+**Local cloud dev:** `npm run dev:cloud` sets `SCRAPBOOK_CLOUD_DEV=1` and uses in-memory PGlite with database sessions (same DB as scrap APIs). Google OAuth still required.
+
+## Deploy
+
+Migrations run before build via `vercel-build` (`npm run db:migrate && npm run build`). Ensure `DATABASE_URL` is set in the Vercel project.

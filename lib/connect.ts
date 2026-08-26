@@ -1,12 +1,21 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, count, eq, gt, isNull } from "drizzle-orm";
-import { connectTokens, redeemAttempts, users } from "@/db/schema";
+import { and, eq, gt, isNull } from "drizzle-orm";
+import { connectTokens, users } from "@/db/schema";
 import { connectUsers } from "@/lib/connections";
+import {
+  enforceRateLimit,
+  pruneAttemptsOlderThan,
+  sweepExpiredConnectTokens,
+} from "@/lib/rate-limit";
 import type { AppDb } from "@/lib/types";
 
 export const TOKEN_TTL_MS = 60_000;
 export const REDEEM_WINDOW_MS = 60_000;
 export const REDEEM_MAX_PER_BUCKET = 20;
+export const MINT_WINDOW_MS = 60_000;
+export const MINT_MAX_PER_BUCKET = 30;
+export const SCRAP_CREATE_WINDOW_MS = 60_000;
+export const SCRAP_CREATE_MAX_PER_BUCKET = 40;
 
 export function hashToken(raw: string) {
   return createHash("sha256").update(raw).digest("hex");
@@ -17,6 +26,7 @@ export async function mintConnectToken(
   userId: string,
   at: Date = new Date(),
 ) {
+  await sweepExpiredConnectTokens(db, at);
   const raw = randomBytes(32).toString("base64url");
   const tokenHash = hashToken(raw);
   await db.delete(connectTokens).where(eq(connectTokens.userId, userId));
@@ -27,6 +37,38 @@ export async function mintConnectToken(
     createdAt: at,
   });
   return raw;
+}
+
+export async function enforceMintRateLimit(
+  db: AppDb,
+  userId: string,
+  ip: string,
+  at: Date = new Date(),
+): Promise<boolean> {
+  await pruneAttemptsOlderThan(db, at, MINT_WINDOW_MS);
+  return enforceRateLimit(
+    db,
+    [`mint:uid:${userId}`, `mint:ip:${ip}`],
+    at,
+    MINT_WINDOW_MS,
+    MINT_MAX_PER_BUCKET,
+  );
+}
+
+export async function enforceScrapCreateRateLimit(
+  db: AppDb,
+  userId: string,
+  ip: string,
+  at: Date = new Date(),
+): Promise<boolean> {
+  await pruneAttemptsOlderThan(db, at, SCRAP_CREATE_WINDOW_MS);
+  return enforceRateLimit(
+    db,
+    [`scrap:uid:${userId}`, `scrap:ip:${ip}`],
+    at,
+    SCRAP_CREATE_WINDOW_MS,
+    SCRAP_CREATE_MAX_PER_BUCKET,
+  );
 }
 
 export type RedeemFailure =
@@ -40,21 +82,6 @@ export type RedeemResult =
   | { ok: true; otherUserId: string }
   | { ok: false; code: RedeemFailure };
 
-async function tooManyAttempts(
-  db: AppDb,
-  bucket: string,
-  at: Date,
-): Promise<boolean> {
-  const since = new Date(at.getTime() - REDEEM_WINDOW_MS);
-  const [row] = await db
-    .select({ n: count() })
-    .from(redeemAttempts)
-    .where(
-      and(eq(redeemAttempts.bucket, bucket), gt(redeemAttempts.createdAt, since)),
-    );
-  return (row?.n ?? 0) >= REDEEM_MAX_PER_BUCKET;
-}
-
 export async function redeemToken(
   db: AppDb,
   input: {
@@ -65,16 +92,20 @@ export async function redeemToken(
   },
 ): Promise<RedeemResult> {
   const at = input.at ?? new Date();
-  const buckets = [`uid:${input.viewerId}`, `ip:${input.ip}`];
-  for (const bucket of buckets) {
-    if (await tooManyAttempts(db, bucket, at)) {
-      return { ok: false, code: "rate_limit" };
-    }
-    await db.insert(redeemAttempts).values({ bucket, createdAt: at });
-  }
+  await pruneAttemptsOlderThan(db, at, REDEEM_WINDOW_MS);
+
+  const buckets = [`redeem:uid:${input.viewerId}`, `redeem:ip:${input.ip}`];
+  const allowed = await enforceRateLimit(
+    db,
+    buckets,
+    at,
+    REDEEM_WINDOW_MS,
+    REDEEM_MAX_PER_BUCKET,
+  );
+  if (!allowed) return { ok: false, code: "rate_limit" };
 
   const tokenHash = hashToken(input.token);
-  const [row] = await db
+  const [existing] = await db
     .select()
     .from(connectTokens)
     .where(
@@ -82,26 +113,35 @@ export async function redeemToken(
     )
     .limit(1);
 
-  if (!row) return { ok: false, code: "invalid" };
-  if (row.expiresAt.getTime() <= at.getTime()) {
+  if (!existing) return { ok: false, code: "invalid" };
+  if (existing.expiresAt.getTime() <= at.getTime()) {
     return { ok: false, code: "expired" };
   }
-  if (row.userId === input.viewerId) {
+  if (existing.userId === input.viewerId) {
     return { ok: false, code: "self" };
   }
 
-  await db
+  const [consumed] = await db
     .update(connectTokens)
     .set({ consumedAt: at })
-    .where(eq(connectTokens.id, row.id));
+    .where(
+      and(
+        eq(connectTokens.tokenHash, tokenHash),
+        isNull(connectTokens.consumedAt),
+        gt(connectTokens.expiresAt, at),
+      ),
+    )
+    .returning();
+
+  if (!consumed) return { ok: false, code: "invalid" };
 
   await db
     .update(users)
     .set({ onboardedAt: at })
     .where(eq(users.id, input.viewerId));
 
-  await connectUsers(db, input.viewerId, row.userId);
-  return { ok: true, otherUserId: row.userId };
+  await connectUsers(db, input.viewerId, consumed.userId);
+  return { ok: true, otherUserId: consumed.userId };
 }
 
 export function connectUrl(origin: string, rawToken: string) {

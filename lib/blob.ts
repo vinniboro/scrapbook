@@ -1,5 +1,4 @@
-import { get } from "@vercel/blob";
-import { put } from "@vercel/blob";
+import { del, get, put } from "@vercel/blob";
 import type { ImageStore } from "@/lib/scraps";
 import { memoryImageStore } from "@/lib/scraps";
 
@@ -31,5 +30,8 @@ const vercelImageStore: ImageStore = {
       bytes: Buffer.concat(chunks),
       contentType: result.blob.contentType || "application/octet-stream",
     };
+  },
+  async delete(pathname) {
+    await del(pathname);
   },
 };

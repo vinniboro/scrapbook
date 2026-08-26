@@ -2,6 +2,7 @@ import { auth, signIn } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { getImageStore } from "@/lib/blob";
 import { createScrap, isMember } from "@/lib/scraps";
+import { validateImageFile } from "@/lib/upload";
 import { toStoredVisibility } from "@/lib/visibility-names";
 import { redirect } from "next/navigation";
 
@@ -112,7 +113,9 @@ async function captureImage(formData: FormData) {
   if (!member) redirect("/up");
   const stored = toStoredVisibility(String(formData.get("visibility") ?? ""));
   const file = formData.get("file");
-  if (!stored || !(file instanceof File) || file.size === 0) redirect("/up");
+  if (!stored || !(file instanceof File)) redirect("/up");
+  const imageError = validateImageFile(file);
+  if (imageError) redirect("/up");
   const bytes = Buffer.from(await file.arrayBuffer());
   await createScrap(
     member.db,

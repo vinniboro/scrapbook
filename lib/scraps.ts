@@ -12,6 +12,7 @@ export type ImageStore = {
   get: (
     pathname: string,
   ) => Promise<{ bytes: Buffer; contentType: string } | null>;
+  delete: (pathname: string) => Promise<void>;
 };
 
 const memory = new Map<string, { bytes: Buffer; contentType: string }>();
@@ -22,6 +23,9 @@ export const memoryImageStore: ImageStore = {
   },
   async get(pathname) {
     return memory.get(pathname) ?? null;
+  },
+  async delete(pathname) {
+    memory.delete(pathname);
   },
 };
 
@@ -50,11 +54,26 @@ export function encodeCursor(createdAt: Date, id: string) {
   return Buffer.from(`${createdAt.toISOString()}|${id}`).toString("base64url");
 }
 
+export class BadCursorError extends Error {
+  constructor() {
+    super("bad cursor");
+    this.name = "BadCursorError";
+  }
+}
+
 export function decodeCursor(cursor: string): { createdAt: Date; id: string } {
-  const raw = Buffer.from(cursor, "base64url").toString("utf8");
-  const sep = raw.lastIndexOf("|");
-  if (sep < 0) throw new Error("bad cursor");
-  return { createdAt: new Date(raw.slice(0, sep)), id: raw.slice(sep + 1) };
+  try {
+    const raw = Buffer.from(cursor, "base64url").toString("utf8");
+    const sep = raw.lastIndexOf("|");
+    if (sep < 0) throw new BadCursorError();
+    const createdAt = new Date(raw.slice(0, sep));
+    const id = raw.slice(sep + 1);
+    if (!id || Number.isNaN(createdAt.getTime())) throw new BadCursorError();
+    return { createdAt, id };
+  } catch (error) {
+    if (error instanceof BadCursorError) throw error;
+    throw new BadCursorError();
+  }
 }
 
 function afterCursor(cursor?: string) {
@@ -88,18 +107,25 @@ export async function createScrap(
     blobPathname = `scraps/${id}`;
     await store.put(blobPathname, input.bytes, input.contentType);
   }
-  const [row] = await db
-    .insert(scraps)
-    .values({
-      id,
-      authorId,
-      type: input.type,
-      visibility: input.visibility,
-      body: input.type === "text" ? input.body : (input.body ?? null),
-      blobPathname,
-    })
-    .returning();
-  return row;
+  try {
+    const [row] = await db
+      .insert(scraps)
+      .values({
+        id,
+        authorId,
+        type: input.type,
+        visibility: input.visibility,
+        body: input.type === "text" ? input.body : (input.body ?? null),
+        blobPathname,
+      })
+      .returning();
+    return row;
+  } catch (error) {
+    if (blobPathname) {
+      await store.delete(blobPathname).catch(() => undefined);
+    }
+    throw error;
+  }
 }
 
 export async function getScrapForViewer(
@@ -192,12 +218,29 @@ export async function updateScrap(
   return row;
 }
 
-export async function deleteScrap(db: AppDb, authorId: string, scrapId: string) {
+export async function deleteScrap(
+  db: AppDb,
+  authorId: string,
+  scrapId: string,
+  store: ImageStore,
+) {
+  const [existing] = await db
+    .select()
+    .from(scraps)
+    .where(and(eq(scraps.id, scrapId), eq(scraps.authorId, authorId)))
+    .limit(1);
+  if (!existing) return false;
+
   const deleted = await db
     .delete(scraps)
     .where(and(eq(scraps.id, scrapId), eq(scraps.authorId, authorId)))
     .returning();
-  return deleted.length > 0;
+  if (deleted.length === 0) return false;
+
+  if (existing.blobPathname) {
+    await store.delete(existing.blobPathname).catch(() => undefined);
+  }
+  return true;
 }
 
 export async function getScrapImage(
