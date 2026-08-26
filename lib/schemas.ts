@@ -1,6 +1,19 @@
 import { z } from "zod";
+import { toStoredVisibility, type StoredVisibility } from "@/lib/visibility-names";
 
-export const visibilitySchema = z.enum(["public", "private"]);
+export const visibilitySchema = z
+  .string()
+  .transform((value, ctx) => {
+    const stored = toStoredVisibility(value);
+    if (!stored) {
+      ctx.addIssue({
+        code: "custom",
+        message: "visibility must be room, close, public, or private",
+      });
+      return z.NEVER;
+    }
+    return stored;
+  }) satisfies z.ZodType<StoredVisibility>;
 
 export const textScrapSchema = z.object({
   type: z.literal("text"),

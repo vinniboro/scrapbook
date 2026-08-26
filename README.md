@@ -1,16 +1,14 @@
-# Scrapbook plumbing
+# Scrapbook
 
-Google sign-in, QR-only connections, per-scrap public/private visibility. No product UI.
+Exclusive QR connections. Per-scrap place: `room` (next room) or `close` (people you stood with). Stored as `public` / `private`.
+
+## Scripts
+
+- `npm test` — PGlite visibility and QR suite
+- `npm run dev:cloud` — in-memory Postgres when `DATABASE_URL` is unset
+- `npm run db:generate` — Drizzle generate
+- `npm run db:migrate` — apply `db/migrations` when `DATABASE_URL` is set
 
 ## Env
 
-Copy `.env.example` and set:
-
-- `AUTH_SECRET` — `openssl rand -base64 32`
-- `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` — Google OAuth client (redirect `https://<host>/api/auth/callback/google`)
-- `AUTH_GENESIS_EMAIL` — first member; they get a QR without scanning
-- `DATABASE_URL` — Neon Postgres
-- `BLOB_READ_WRITE_TOKEN` or a private Blob store connected to the Vercel project (OIDC)
-- `AUTH_URL` — public origin
-
-`npm test` runs the visibility/QR suite against in-process Postgres (PGlite). `npm run db:generate` writes Drizzle migrations. Apply them to Neon with `drizzle-kit migrate` once `DATABASE_URL` is set.
+See `.env.example`. Vercel: Neon `DATABASE_URL`, Auth.js `AUTH_SECRET` `AUTH_GOOGLE_ID` `AUTH_GOOGLE_SECRET` `AUTH_URL` `AUTH_GENESIS_EMAIL`, private Blob `BLOB_READ_WRITE_TOKEN` or OIDC.

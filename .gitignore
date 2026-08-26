@@ -42,4 +42,8 @@ yarn-error.log*
 next-env.d.ts
 
 /agent-tools
+/DOWNLOAD_THIS
+scrapbook-export.zip
+scrapbook.gitbundle
+
 

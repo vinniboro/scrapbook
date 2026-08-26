@@ -38,6 +38,17 @@ describe("plumbing", () => {
     ).toBe(false);
   });
 
+  it("accepts room and close as spoken visibility", () => {
+    expect(
+      textScrapSchema.parse({ type: "text", visibility: "room", body: "hello" })
+        .visibility,
+    ).toBe("public");
+    expect(
+      textScrapSchema.parse({ type: "text", visibility: "close", body: "hello" })
+        .visibility,
+    ).toBe("private");
+  });
+
   it("keeps a first-time user empty until they scan, then View All plus friends' public only", async () => {
     const { db, close } = await createTestDb();
     try {
@@ -98,6 +109,8 @@ describe("plumbing", () => {
       expect(await relationTo(db, user1, you)).toBe("direct");
 
       const timeline = await listTimeline(db, you);
+      expect(timeline.scraps.some((scrap) => scrap.place === "close")).toBe(true);
+      expect(timeline.scraps.some((scrap) => scrap.place === "room")).toBe(true);
       const bodies = timeline.scraps.map((scrap) => scrap.body).sort();
       expect(bodies).toEqual(["friend public", "user1 private", "user1 public"]);
 

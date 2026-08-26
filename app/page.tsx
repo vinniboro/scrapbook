@@ -1,7 +1,12 @@
 import { auth, signIn } from "@/lib/auth";
+import { isPhone } from "@/lib/device";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 
 export default async function HomePage() {
   const session = await auth();
+  const phone = isPhone((await headers()).get("user-agent"));
+
   if (!session?.user?.id) {
     return (
       <main>
@@ -14,7 +19,7 @@ export default async function HomePage() {
           <button type="submit">Continue with Google</button>
         </form>
         <p>
-          <a href="/worth">the manifesto</a>
+          <a href="/worth">What is truly worth sharing?</a>
         </p>
       </main>
     );
@@ -23,12 +28,11 @@ export default async function HomePage() {
     return (
       <main>
         <p>nothing to view. scan a QR.</p>
+        <p>
+          <a href="/qr">your code</a>
+        </p>
       </main>
     );
   }
-  return (
-    <main>
-      <p>open /qr on your phone to connect. GET /api/timeline to view.</p>
-    </main>
-  );
+  redirect(phone ? "/up" : "/today");
 }

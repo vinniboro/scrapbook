@@ -6,7 +6,6 @@ import { schema } from "@/db/schema";
 import type { AppDb } from "@/lib/types";
 
 declare global {
-  // eslint-disable-next-line no-var
   var __scrapbookCloudDb: AppDb | undefined;
 }
 

@@ -2,6 +2,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { scraps, users } from "@/db/schema";
 import { relationTo } from "@/lib/connections";
 import type { AppDb } from "@/lib/types";
+import { toSpokenVisibility } from "@/lib/visibility-names";
 import { canViewScrap, visibleToViewer } from "@/lib/visibility";
 
 export const PAGE_SIZE = 20;
@@ -68,6 +69,7 @@ export function serializeScrap(scrap: typeof scraps.$inferSelect) {
     authorId: scrap.authorId,
     type: scrap.type,
     visibility: scrap.visibility,
+    place: toSpokenVisibility(scrap.visibility),
     body: scrap.body,
     createdAt: scrap.createdAt.toISOString(),
     image: scrap.type === "image" ? `/api/scraps/${scrap.id}/image` : null,
