@@ -15,6 +15,13 @@
       "when": 1787742321790,
       "tag": "0001_naive_otto_octavius",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787817620836,
+      "tag": "0002_optimal_warbound",
+      "breakpoints": true
     }
   ]
 }

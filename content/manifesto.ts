@@ -21,15 +21,15 @@ export const manifesto = {
     {
       heading: "After you meet",
       paragraphs: [
-        "The person you scanned: you see all of it. What they kept close, and what they let travel. The whole scrapbook, including what they made before they knew you.",
-        "Their people: only what those people let travel. You do not inherit someone else's intimacies. To see those, you go and scan them yourself.",
+        "People you have stood with see what you mark public. That is the scrapbook you keep with everyone you have met here.",
+        "A group is a named channel of selected friends. Anyone in it can place something. Only members see it. You do not inherit someone else's intimacies.",
       ],
     },
     {
       heading: "Each thing chooses",
       paragraphs: [
-        "Not an account that is open or closed. Each scrap you place is a choice: keep it with the people you have stood with, or let it travel one room further, to the people they have stood with.",
-        "Signed out, there is still nothing. What we call public is not the street. It is the next room.",
+        "Not an account that is open or closed. Each scrap you place is a choice: public, for the people you have stood with, or a group you named together.",
+        "Signed out, there is still nothing. What we call public is not the street. It is the people you have met.",
       ],
     },
     {
@@ -53,3 +53,18 @@ export const manifesto = {
     },
   ],
 } as const;
+
+export const walkthrough = [
+  {
+    title: "How it works",
+    body: "There is no search and no feed of strangers. You meet in person. One of you shows a code; the other scans it. Until that happens, the scrapbook is empty on purpose.",
+  },
+  {
+    title: "What sharing is",
+    body: "Public is for everyone you have stood with. A group is a named channel of selected friends — anyone in it can place something, and only they see it.",
+  },
+  {
+    title: "Why it is secure",
+    body: "The code lasts about a minute and can be used once. We store a hash, not the code. Photographs never have a public URL. Signed out, there is nothing to see.",
+  },
+] as const;

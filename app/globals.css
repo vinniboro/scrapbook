@@ -1,6 +1,35 @@
 @import "tailwindcss";
-@import "portfolio-website/theme.css";
+@import "../node_modules/portfolio-website/src/app/theme.css";
 @source "../node_modules/portfolio-website/src/app";
+
+@theme inline {
+  --radius-plate: var(--radius-panel);
+  --text-essay: 1.875rem;
+}
+
+/* Swiss display: Geist is the neo-grotesque. Tight track + lead. Kit gray, not black. */
+.type-display {
+  font-size: var(--text-display);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+
+.type-essay {
+  font-size: var(--text-essay);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.18;
+  text-wrap: pretty;
+}
+
+.type-title {
+  font-size: var(--text-title);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
 
 * {
   box-sizing: border-box;
@@ -67,7 +96,7 @@ button:active {
 }
 
 img:not(.no-media-frame) {
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-card);
   outline: 1px solid var(--image-outline);
   outline-offset: -1px;
 }

@@ -1,8 +1,9 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { scraps, users } from "@/db/schema";
 import { relationTo } from "@/lib/connections";
+import { isGroupMember } from "@/lib/groups";
+import { parseMusicUrl } from "@/lib/music";
 import type { AppDb } from "@/lib/types";
-import { toSpokenVisibility } from "@/lib/visibility-names";
 import { canViewScrap, visibleToViewer } from "@/lib/visibility";
 
 export const PAGE_SIZE = 20;
@@ -33,22 +34,45 @@ export function resetMemoryImageStore() {
   memory.clear();
 }
 
-export type ScrapVisibility = "public" | "private";
-export type ScrapType = "text" | "image";
+export type ScrapVisibility = "public" | "group";
+export type ScrapType = "text" | "image" | "book" | "music";
 
-export type CreateTextScrap = {
-  type: "text";
+type Audience = {
   visibility: ScrapVisibility;
+  groupId?: string | null;
+};
+
+export type CreateTextScrap = Audience & {
+  type: "text";
   body: string;
 };
 
-export type CreateImageScrap = {
+export type CreateImageScrap = Audience & {
   type: "image";
-  visibility: ScrapVisibility;
   body?: string;
   bytes: Buffer;
   contentType: string;
 };
+
+export type CreateBookScrap = Audience & {
+  type: "book";
+  googleVolumeId: string;
+  bookTitle: string;
+  bookAuthors?: string | null;
+  bookThumbnailUrl?: string | null;
+};
+
+export type CreateMusicScrap = Audience & {
+  type: "music";
+  musicUrl: string;
+  musicTitle?: string;
+};
+
+export type CreateScrapInput =
+  | CreateTextScrap
+  | CreateImageScrap
+  | CreateBookScrap
+  | CreateMusicScrap;
 
 export function encodeCursor(createdAt: Date, id: string) {
   return Buffer.from(`${createdAt.toISOString()}|${id}`).toString("base64url");
@@ -76,11 +100,13 @@ export function decodeCursor(cursor: string): { createdAt: Date; id: string } {
   }
 }
 
-function afterCursor(cursor?: string) {
+export function afterCursor(cursor?: string) {
   if (!cursor) return sql`true`;
   const { createdAt, id } = decodeCursor(cursor);
   return sql`(${scraps.createdAt} < ${createdAt} or (${scraps.createdAt} = ${createdAt} and ${scraps.id} < ${id}))`;
 }
+
+export type ScrapView = ReturnType<typeof serializeScrap>;
 
 export function serializeScrap(scrap: typeof scraps.$inferSelect) {
   return {
@@ -88,25 +114,68 @@ export function serializeScrap(scrap: typeof scraps.$inferSelect) {
     authorId: scrap.authorId,
     type: scrap.type,
     visibility: scrap.visibility,
-    place: toSpokenVisibility(scrap.visibility),
+    groupId: scrap.groupId,
     body: scrap.body,
     createdAt: scrap.createdAt.toISOString(),
     image: scrap.type === "image" ? `/api/scraps/${scrap.id}/image` : null,
+    book:
+      scrap.type === "book"
+        ? {
+            googleVolumeId: scrap.googleVolumeId,
+            title: scrap.bookTitle,
+            authors: scrap.bookAuthors,
+            thumbnailUrl: scrap.bookThumbnailUrl,
+          }
+        : null,
+    music:
+      scrap.type === "music"
+        ? {
+            url: scrap.musicUrl,
+            title: scrap.musicTitle,
+            provider: scrap.musicProvider,
+          }
+        : null,
   };
+}
+
+async function assertAudience(
+  db: AppDb,
+  authorId: string,
+  visibility: ScrapVisibility,
+  groupId?: string | null,
+) {
+  if (visibility === "public") return { visibility, groupId: null as string | null };
+  if (!groupId) throw new Error("group required");
+  const member = await isGroupMember(db, groupId, authorId);
+  if (!member) throw new Error("not a group member");
+  return { visibility, groupId };
 }
 
 export async function createScrap(
   db: AppDb,
   authorId: string,
-  input: CreateTextScrap | CreateImageScrap,
+  input: CreateScrapInput,
   store: ImageStore,
 ) {
+  const audience = await assertAudience(
+    db,
+    authorId,
+    input.visibility,
+    input.groupId,
+  );
   const id = crypto.randomUUID();
   let blobPathname: string | null = null;
   if (input.type === "image") {
     blobPathname = `scraps/${id}`;
     await store.put(blobPathname, input.bytes, input.contentType);
   }
+
+  const music =
+    input.type === "music" ? parseMusicUrl(input.musicUrl) : null;
+  if (input.type === "music" && !music) {
+    throw new Error("invalid music url");
+  }
+
   try {
     const [row] = await db
       .insert(scraps)
@@ -114,9 +183,17 @@ export async function createScrap(
         id,
         authorId,
         type: input.type,
-        visibility: input.visibility,
-        body: input.type === "text" ? input.body : (input.body ?? null),
+        visibility: audience.visibility,
+        groupId: audience.groupId,
+        body: input.type === "text" ? input.body : input.type === "image" ? (input.body ?? null) : null,
         blobPathname,
+        googleVolumeId: input.type === "book" ? input.googleVolumeId : null,
+        bookTitle: input.type === "book" ? input.bookTitle : null,
+        bookAuthors: input.type === "book" ? (input.bookAuthors ?? null) : null,
+        bookThumbnailUrl: input.type === "book" ? (input.bookThumbnailUrl ?? null) : null,
+        musicUrl: music?.musicUrl ?? null,
+        musicTitle: input.type === "music" ? (input.musicTitle ?? null) : null,
+        musicProvider: music?.musicProvider ?? null,
       })
       .returning();
     return row;
@@ -140,6 +217,16 @@ export async function getScrapForViewer(
   return row ?? null;
 }
 
+function paginate(rows: (typeof scraps.$inferSelect)[]) {
+  const hasMore = rows.length > PAGE_SIZE;
+  const page = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
+  const nextCursor =
+    hasMore && page.length > 0
+      ? encodeCursor(page[page.length - 1].createdAt, page[page.length - 1].id)
+      : null;
+  return { scraps: page.map(serializeScrap), nextCursor };
+}
+
 export async function listTimeline(
   db: AppDb,
   viewerId: string,
@@ -151,14 +238,7 @@ export async function listTimeline(
     .where(and(visibleToViewer(viewerId), afterCursor(cursor)))
     .orderBy(desc(scraps.createdAt), desc(scraps.id))
     .limit(PAGE_SIZE + 1);
-
-  const hasMore = rows.length > PAGE_SIZE;
-  const page = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
-  const nextCursor =
-    hasMore && page.length > 0
-      ? encodeCursor(page[page.length - 1].createdAt, page[page.length - 1].id)
-      : null;
-  return { scraps: page.map(serializeScrap), nextCursor };
+  return paginate(rows);
 }
 
 export async function listUserScraps(
@@ -175,7 +255,7 @@ export async function listUserScraps(
     visibleToViewer(viewerId),
     afterCursor(cursor),
   ];
-  if (relation === "twoHop") {
+  if (relation === "direct") {
     filters.push(eq(scraps.visibility, "public"));
   }
 
@@ -186,20 +266,37 @@ export async function listUserScraps(
     .orderBy(desc(scraps.createdAt), desc(scraps.id))
     .limit(PAGE_SIZE + 1);
 
-  const hasMore = rows.length > PAGE_SIZE;
-  const page = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
-  const nextCursor =
-    hasMore && page.length > 0
-      ? encodeCursor(page[page.length - 1].createdAt, page[page.length - 1].id)
-      : null;
-  return { scraps: page.map(serializeScrap), nextCursor, relation };
+  return { ...paginate(rows), relation };
+}
+
+export async function listGroupScraps(
+  db: AppDb,
+  viewerId: string,
+  groupId: string,
+  cursor?: string,
+) {
+  const member = await isGroupMember(db, groupId, viewerId);
+  if (!member) return null;
+  const rows = await db
+    .select()
+    .from(scraps)
+    .where(
+      and(
+        eq(scraps.groupId, groupId),
+        visibleToViewer(viewerId),
+        afterCursor(cursor),
+      ),
+    )
+    .orderBy(desc(scraps.createdAt), desc(scraps.id))
+    .limit(PAGE_SIZE + 1);
+  return paginate(rows);
 }
 
 export async function updateScrap(
   db: AppDb,
   authorId: string,
   scrapId: string,
-  patch: { visibility?: ScrapVisibility; body?: string },
+  patch: { visibility?: ScrapVisibility; groupId?: string | null; body?: string },
 ) {
   const [existing] = await db
     .select()
@@ -207,10 +304,15 @@ export async function updateScrap(
     .where(and(eq(scraps.id, scrapId), eq(scraps.authorId, authorId)))
     .limit(1);
   if (!existing) return null;
+  const visibility = patch.visibility ?? existing.visibility;
+  const groupId =
+    patch.groupId !== undefined ? patch.groupId : existing.groupId;
+  const audience = await assertAudience(db, authorId, visibility, groupId);
   const [row] = await db
     .update(scraps)
     .set({
-      visibility: patch.visibility ?? existing.visibility,
+      visibility: audience.visibility,
+      groupId: audience.groupId,
       body: patch.body ?? existing.body,
     })
     .where(eq(scraps.id, scrapId))
@@ -261,4 +363,20 @@ export async function isMember(db: AppDb, userId: string) {
     .where(eq(users.id, userId))
     .limit(1);
   return Boolean(row?.onboardedAt);
+}
+
+export async function hasCompletedWalkthrough(db: AppDb, userId: string) {
+  const [row] = await db
+    .select({ walkthroughCompletedAt: users.walkthroughCompletedAt })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return Boolean(row?.walkthroughCompletedAt);
+}
+
+export async function completeWalkthrough(db: AppDb, userId: string) {
+  await db
+    .update(users)
+    .set({ walkthroughCompletedAt: new Date() })
+    .where(eq(users.id, userId));
 }

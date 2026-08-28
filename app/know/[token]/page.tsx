@@ -1,7 +1,9 @@
 import { auth, signIn } from "@/lib/auth";
 import { redeemToken } from "@/lib/connect";
 import { getDb } from "@/lib/db";
+import { isPhone } from "@/lib/device";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 
 export const runtime = "nodejs";
 
@@ -17,8 +19,9 @@ export default async function KnowPage({
     return null;
   }
 
+  const headerList = await headers();
   const ip =
-    (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    headerList.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   const result = await redeemToken(getDb(), {
     viewerId: session.user.id,
     token,
@@ -27,15 +30,15 @@ export default async function KnowPage({
 
   if (!result.ok) {
     return (
-      <main>
+      <main className="p-8">
         <p>{result.code}</p>
       </main>
     );
   }
 
-  return (
-    <main>
-      <p>connected</p>
-    </main>
-  );
+  const phone = isPhone(headerList.get("user-agent"));
+  if (!session.user.walkthroughCompletedAt) {
+    redirect("/how");
+  }
+  redirect(phone ? "/me" : "/today");
 }

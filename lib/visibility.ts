@@ -3,36 +3,27 @@ import { scraps } from "@/db/schema";
 import type { AppDb } from "@/lib/types";
 
 /**
- * SQL predicate for a scrap the viewer may see.
- * Author: all. Direct QR connection: all (View All, including past private).
- * Friend of a connection: public only. Logged-out never uses this — callers 404.
+ * Author: all. Direct QR connection: public scraps.
+ * Group member: group scraps. Logged-out never uses this — callers 404.
  */
 export function visibleToViewer(viewerId: string) {
   return sql`(
     ${scraps.authorId} = ${viewerId}
-    or exists (
-      select 1 from connections c
-      where c.user_a_id = least(${viewerId}, ${scraps.authorId})
-        and c.user_b_id = greatest(${viewerId}, ${scraps.authorId})
-    )
     or (
       ${scraps.visibility} = 'public'
       and exists (
-        select 1
-        from connections vx
-        join connections xa on (
-          (
-            vx.user_a_id = ${viewerId}
-            and xa.user_a_id = least(vx.user_b_id, ${scraps.authorId})
-            and xa.user_b_id = greatest(vx.user_b_id, ${scraps.authorId})
-          )
-          or (
-            vx.user_b_id = ${viewerId}
-            and xa.user_a_id = least(vx.user_a_id, ${scraps.authorId})
-            and xa.user_b_id = greatest(vx.user_a_id, ${scraps.authorId})
-          )
-        )
-        where ${scraps.authorId} <> ${viewerId}
+        select 1 from connections c
+        where c.user_a_id = least(${viewerId}, ${scraps.authorId})
+          and c.user_b_id = greatest(${viewerId}, ${scraps.authorId})
+      )
+    )
+    or (
+      ${scraps.visibility} = 'group'
+      and ${scraps.groupId} is not null
+      and exists (
+        select 1 from group_members gm
+        where gm.group_id = ${scraps.groupId}
+          and gm.user_id = ${viewerId}
       )
     )
   )`;

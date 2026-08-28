@@ -44,3 +44,27 @@ export async function finishNewUser(
     .set({ handle, onboardedAt })
     .where(eq(users.id, user.id));
 }
+
+export async function updateProfile(
+  db: AppDb,
+  userId: string,
+  patch: { name?: string; handle?: string },
+) {
+  if (patch.handle) {
+    const [taken] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.handle, patch.handle))
+      .limit(1);
+    if (taken && taken.id !== userId) return null;
+  }
+  const [row] = await db
+    .update(users)
+    .set({
+      ...(patch.name ? { name: patch.name } : {}),
+      ...(patch.handle ? { handle: patch.handle } : {}),
+    })
+    .where(eq(users.id, userId))
+    .returning();
+  return row ?? null;
+}

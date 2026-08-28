@@ -8,6 +8,7 @@ import {
   users,
   verificationTokens,
 } from "@/db/schema";
+import { getDatabaseUrl } from "@/lib/database-url";
 import { cloudDevEnabled } from "@/lib/db-cloud";
 import { getDb } from "@/lib/db";
 import { finishNewUser } from "@/lib/users";
@@ -23,12 +24,18 @@ function createAdapter() {
 }
 
 function hasPersistedDatabase() {
-  return Boolean(process.env.DATABASE_URL) || cloudDevEnabled();
+  return Boolean(getDatabaseUrl()) || cloudDevEnabled();
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: hasPersistedDatabase() ? createAdapter() : undefined,
   session: { strategy: hasPersistedDatabase() ? "database" : "jwt" },
+  secret:
+    process.env.AUTH_SECRET ||
+    process.env.NEXTAUTH_SECRET ||
+    (process.env.NODE_ENV === "production"
+      ? undefined
+      : "scrapbook-dev-only-auth-secret"),
   trustHost: true,
   providers: [Google],
   events: {
@@ -47,10 +54,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const row = user as {
         handle?: string | null;
         onboardedAt?: Date | null;
+        walkthroughCompletedAt?: Date | null;
       };
       session.user.handle = row.handle ?? null;
       session.user.onboardedAt = row.onboardedAt
         ? row.onboardedAt.toISOString()
+        : null;
+      session.user.walkthroughCompletedAt = row.walkthroughCompletedAt
+        ? row.walkthroughCompletedAt.toISOString()
         : null;
       return session;
     },

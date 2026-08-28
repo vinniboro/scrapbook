@@ -21,6 +21,7 @@ export const users = pgTable("user", {
   image: text("image"),
   handle: text("handle").unique(),
   onboardedAt: timestamp("onboarded_at", { mode: "date" }),
+  walkthroughCompletedAt: timestamp("walkthrough_completed_at", { mode: "date" }),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
 });
 
@@ -125,6 +126,40 @@ export const connectTokens = pgTable(
   (table) => [index("connect_tokens_user_id_idx").on(table.userId)],
 );
 
+export const groups = pgTable(
+  "groups",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    name: text("name").notNull(),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => [index("groups_owner_idx").on(table.ownerId)],
+);
+
+export const groupMembers = pgTable(
+  "group_members",
+  {
+    groupId: text("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: text("role").$type<"owner" | "member">().notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.groupId, table.userId] }),
+    check("group_members_role_check", sql`${table.role} in ('owner', 'member')`),
+    index("group_members_user_idx").on(table.userId),
+  ],
+);
+
 export const scraps = pgTable(
   "scraps",
   {
@@ -134,17 +169,31 @@ export const scraps = pgTable(
     authorId: text("author_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    type: text("type").$type<"text" | "image">().notNull(),
-    visibility: text("visibility").$type<"public" | "private">().notNull(),
+    type: text("type").$type<"text" | "image" | "book" | "music">().notNull(),
+    visibility: text("visibility").$type<"public" | "group">().notNull(),
+    groupId: text("group_id").references(() => groups.id, { onDelete: "cascade" }),
     body: text("body"),
     blobPathname: text("blob_pathname"),
+    googleVolumeId: text("google_volume_id"),
+    bookTitle: text("book_title"),
+    bookAuthors: text("book_authors"),
+    bookThumbnailUrl: text("book_thumbnail_url"),
+    musicUrl: text("music_url"),
+    musicTitle: text("music_title"),
+    musicProvider: text("music_provider").$type<
+      "spotify" | "youtube" | "bandcamp" | "soundcloud" | "other"
+    >(),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
   },
   (table) => [
-    check("scraps_type_check", sql`${table.type} in ('text', 'image')`),
     check(
-      "scraps_visibility_check",
-      sql`${table.visibility} in ('public', 'private')`,
+      "scraps_type_check",
+      sql`${table.type} in ('text', 'image', 'book', 'music')`,
+    ),
+    check("scraps_visibility_check", sql`${table.visibility} in ('public', 'group')`),
+    check(
+      "scraps_audience_check",
+      sql`(${table.visibility} = 'public' and ${table.groupId} is null) or (${table.visibility} = 'group' and ${table.groupId} is not null)`,
     ),
     index("scraps_author_created_idx").on(
       table.authorId,
@@ -152,6 +201,48 @@ export const scraps = pgTable(
       table.id,
     ),
     index("scraps_created_idx").on(table.createdAt, table.id),
+    index("scraps_group_idx").on(table.groupId),
+  ],
+);
+
+export const albums = pgTable(
+  "albums",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    authorId: text("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    visibility: text("visibility").$type<"public" | "group">().notNull(),
+    groupId: text("group_id").references(() => groups.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => [
+    check("albums_visibility_check", sql`${table.visibility} in ('public', 'group')`),
+    check(
+      "albums_audience_check",
+      sql`(${table.visibility} = 'public' and ${table.groupId} is null) or (${table.visibility} = 'group' and ${table.groupId} is not null)`,
+    ),
+    index("albums_author_idx").on(table.authorId),
+  ],
+);
+
+export const albumItems = pgTable(
+  "album_items",
+  {
+    albumId: text("album_id")
+      .notNull()
+      .references(() => albums.id, { onDelete: "cascade" }),
+    scrapId: text("scrap_id")
+      .notNull()
+      .references(() => scraps.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.albumId, table.scrapId] }),
+    index("album_items_scrap_idx").on(table.scrapId),
   ],
 );
 
@@ -177,6 +268,10 @@ export const schema = {
   authenticators,
   connections,
   connectTokens,
+  groups,
+  groupMembers,
   scraps,
+  albums,
+  albumItems,
   redeemAttempts,
 };

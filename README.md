@@ -1,6 +1,8 @@
 # Scrapbook
 
-Exclusive QR connections. Per-scrap place: `room` (next room) or `close` (people you stood with). Stored as `public` / `private`.
+Visual system and heuristics for agents: [`docs/design.md`](docs/design.md). Kit tokens stay; do not invent a second palette.
+
+Exclusive QR connections. Each scrap is **public** (people you have stood with) or in a **named group** (shared channel).
 
 ## Scripts
 
@@ -13,7 +15,7 @@ Exclusive QR connections. Per-scrap place: `room` (next room) or `close` (people
 
 See `.env.example`.
 
-**Vercel / production:** Neon `DATABASE_URL`, Auth.js `AUTH_SECRET` `AUTH_GOOGLE_ID` `AUTH_GOOGLE_SECRET` `AUTH_URL`, private Blob `BLOB_READ_WRITE_TOKEN` or `BLOB_STORE_ID`.
+**Vercel / production:** Neon `DATABASE_URL` (or `POSTGRES_URL`). Blank values imported from `.env.example` will fail `db:migrate`. Also set Auth.js `AUTH_SECRET` `AUTH_GOOGLE_ID` `AUTH_GOOGLE_SECRET` `AUTH_URL`, private Blob `BLOB_READ_WRITE_TOKEN` or `BLOB_STORE_ID`. Optional `GOOGLE_BOOKS_API_KEY` for book search (still proxied through `/api/books/search`).
 
 **Genesis bootstrap:** Set `AUTH_GENESIS_EMAIL` to the Google account that should be the first member. That user is onboarded on sign-up and can mint QR codes at `/qr`. Everyone else must scan a QR before they can mint or post — there is no directory or search.
 

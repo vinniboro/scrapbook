@@ -6,6 +6,7 @@ declare module "next-auth" {
       id: string;
       handle: string | null;
       onboardedAt: string | null;
+      walkthroughCompletedAt: string | null;
     };
   }
 }

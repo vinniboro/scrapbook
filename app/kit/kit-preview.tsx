@@ -34,11 +34,11 @@ const COLORS = [
 ] as const;
 
 const TYPE = [
-  { name: "display", className: "text-display font-semibold", sample: "Scrapbook" },
-  { name: "title", className: "text-title font-medium", sample: "What have you been up to?" },
-  { name: "body-lg", className: "text-body-lg", sample: "A social scrapbook, not a stage." },
+  { name: "display", className: "type-display", sample: "scrapbook" },
+  { name: "essay", className: "type-essay", sample: "This is a social scrapbook, not a stage." },
+  { name: "title", className: "type-title", sample: "What have you been up to?" },
   { name: "body", className: "text-body", sample: "Share with people you know. No algorithm." },
-  { name: "caption", className: "text-caption font-mono tabular-nums", sample: "close · room" },
+  { name: "caption", className: "text-caption", sample: "close · room" },
 ] as const;
 
 const RADII = [
@@ -76,7 +76,7 @@ export function KitPreview() {
       <StaggerList className="flex flex-col gap-16 py-12">
         <div className="flex flex-col gap-2">
           <p className="font-mono text-caption opacity-50">kit</p>
-          <h1 className="text-display font-semibold">Tokens and components</h1>
+          <h1 className="type-display">tokens and components</h1>
           <p className="text-body opacity-70">
             Living reference. Product routes are unchanged.
           </p>

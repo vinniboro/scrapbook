@@ -3,6 +3,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { schema } from "@/db/schema";
+import { getDatabaseUrl } from "@/lib/database-url";
 import type { AppDb } from "@/lib/types";
 
 declare global {
@@ -14,7 +15,7 @@ let initPromise: Promise<AppDb> | null = null;
 export function cloudDevEnabled() {
   return (
     process.env.SCRAPBOOK_CLOUD_DEV === "1" ||
-    (!process.env.DATABASE_URL && process.env.NODE_ENV !== "production")
+    (!getDatabaseUrl() && process.env.NODE_ENV !== "production")
   );
 }
 

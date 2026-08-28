@@ -1,6 +1,5 @@
 import { and, eq, inArray, or, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
-import { connections, users } from "@/db/schema";
+import { connections, groupMembers, groups, users } from "@/db/schema";
 import type { AppDb } from "@/lib/types";
 
 export function orderedPair(a: string, b: string): [string, string] {
@@ -26,6 +25,18 @@ export async function disconnectUsers(db: AppDb, a: string, b: string) {
     .where(
       and(eq(connections.userAId, userAId), eq(connections.userBId, userBId)),
     );
+  const ownedByA = await db.select({ id: groups.id }).from(groups).where(eq(groups.ownerId, a));
+  const ownedByB = await db.select({ id: groups.id }).from(groups).where(eq(groups.ownerId, b));
+  for (const group of ownedByA) {
+    await db
+      .delete(groupMembers)
+      .where(and(eq(groupMembers.groupId, group.id), eq(groupMembers.userId, b)));
+  }
+  for (const group of ownedByB) {
+    await db
+      .delete(groupMembers)
+      .where(and(eq(groupMembers.groupId, group.id), eq(groupMembers.userId, a)));
+  }
 }
 
 export async function listConnectionIds(db: AppDb, userId: string) {
@@ -54,7 +65,7 @@ export async function listConnections(db: AppDb, userId: string) {
   return people;
 }
 
-export type Relation = "self" | "direct" | "twoHop" | "none";
+export type Relation = "self" | "direct" | "none";
 
 export async function relationTo(
   db: AppDb,
@@ -71,29 +82,5 @@ export async function relationTo(
     )
     .limit(1);
   if (direct.length > 0) return "direct";
-
-  const vx = alias(connections, "vx");
-  const xa = alias(connections, "xa");
-  const hop = await db
-    .select({ n: sql<number>`1` })
-    .from(vx)
-    .innerJoin(
-      xa,
-      or(
-        and(
-          eq(vx.userAId, viewerId),
-          sql`${xa.userAId} = least(${vx.userBId}, ${otherId})`,
-          sql`${xa.userBId} = greatest(${vx.userBId}, ${otherId})`,
-        ),
-        and(
-          eq(vx.userBId, viewerId),
-          sql`${xa.userAId} = least(${vx.userAId}, ${otherId})`,
-          sql`${xa.userBId} = greatest(${vx.userAId}, ${otherId})`,
-        ),
-      ),
-    )
-    .limit(1);
-
-  if (hop.length > 0) return "twoHop";
   return "none";
 }
