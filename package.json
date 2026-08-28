@@ -12,7 +12,7 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "postinstall": "rm -rf node_modules/portfolio-website/node_modules"
+    "kit:sync": "node scripts/sync-kit.mjs"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.3",
@@ -26,7 +26,7 @@
     "lucide-react": "^1.34.0",
     "next": "16.3.2",
     "next-auth": "^5.0.0-beta.32",
-    "portfolio-website": "file:../portfolio-website",
+    "portfolio-website": "file:./vendor/portfolio-website",
     "postcss": "^8.5.26",
     "qrcode": "^1.5.4",
     "react": "19.2.8",

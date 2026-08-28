@@ -6,7 +6,7 @@ Read this before adding or restyling UI in scrapbook. Kit tokens are the visual 
 
 An editorial scrapbook: photographs and writing are the magazine; chrome is the paper. Sharing is finite (Today is a pack, not a feed). Connect by QR. Place on a phone. Sit with scraps on a desktop.
 
-The visual system lives in the portfolio kit (`portfolio-website` `theme.css` and `components/ui`). Scrapbook product UI lives in this repo’s `components/`. Do not fork the kit look. Do not paint the app like Cosmos (white paper, black chrome).
+The visual system lives in the portfolio kit (`vendor/portfolio-website` `theme.css` and `components/ui`). Scrapbook product UI lives in this repo’s `components/`. Do not fork the kit look. Do not paint the app like Cosmos (white paper, black chrome).
 
 ## Heuristics
 

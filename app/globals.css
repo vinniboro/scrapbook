@@ -1,6 +1,6 @@
 @import "tailwindcss";
-@import "../node_modules/portfolio-website/src/app/theme.css";
-@source "../node_modules/portfolio-website/src/app";
+@import "../vendor/portfolio-website/src/app/theme.css";
+@source "../vendor/portfolio-website/src/app";
 
 @theme inline {
   --radius-plate: var(--radius-panel);

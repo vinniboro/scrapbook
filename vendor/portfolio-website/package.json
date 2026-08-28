@@ -1,0 +1,22 @@
+{
+  "name": "portfolio-website",
+  "version": "0.1.0",
+  "private": true,
+  "sideEffects": ["**/*.css"],
+  "exports": {
+    ".": "./src/app/components/ui/index.ts",
+    "./theme.css": "./src/app/theme.css",
+    "./cn": "./src/app/lib/cn.ts",
+    "./motion": "./src/app/lib/motion.ts",
+    "./motion-provider": "./src/app/components/MotionProvider.tsx",
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "@base-ui/react": "^1.7.0",
+    "framer-motion": ">=12",
+    "lucide-react": "^1.0.0",
+    "next": ">=14",
+    "react": "^18 || ^19",
+    "react-dom": "^18 || ^19"
+  }
+}

@@ -1,6 +1,6 @@
 # Scrapbook
 
-Visual system and heuristics for agents: [`docs/design.md`](docs/design.md). Kit tokens stay; do not invent a second palette.
+Visual system and heuristics for agents: [`docs/design.md`](docs/design.md). Kit tokens stay; do not invent a second palette. The kit is vendored at `vendor/portfolio-website` so Vercel can install it (`npm run kit:sync` from a sibling `../portfolio-website` checkout).
 
 Exclusive QR connections. Each scrap is **public** (people you have stood with) or in a **named group** (shared channel).
 

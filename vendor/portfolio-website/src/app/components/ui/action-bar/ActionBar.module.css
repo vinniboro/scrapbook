@@ -1,0 +1,49 @@
+.root button[data-size="icon"] {
+  position: relative;
+  height: 40px;
+  width: 40px;
+  min-height: 40px;
+  min-width: 40px;
+  padding: 0;
+  gap: 0;
+  border-radius: 9999px;
+}
+
+.root button[data-size="icon"]::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+}
+
+.root button[data-state="active"] {
+  background-color: rgba(var(--foreground-rgb), 0.05);
+}
+
+.root button[data-hover="true"]:hover {
+  background-color: rgba(var(--foreground-rgb), 0.05);
+}
+
+.root button:active {
+  transform: scale(0.97);
+}
+
+.root button svg {
+  display: block;
+  width: 24px;
+  height: 24px;
+  border-radius: 0;
+}
+
+.slot {
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+}
+
+.slot :global(input) {
+  height: 36px;
+  min-height: 36px;
+  width: 10.5rem;
+  padding: 0 10px;
+  font-size: 0.875rem;
+}

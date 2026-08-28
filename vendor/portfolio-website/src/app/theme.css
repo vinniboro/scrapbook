@@ -1,0 +1,82 @@
+/* Tokens + glass. Consumed by this app (via globals.css) and by other repos. */
+
+@theme {
+  --color-background: rgb(var(--background-rgb));
+  --color-foreground: rgb(var(--foreground-rgb));
+  --color-surface: rgb(var(--surface-rgb));
+  --color-secondary: rgb(var(--secondary-rgb));
+  --color-accent: rgb(var(--accent-rgb));
+  --color-hairline: var(--hairline);
+
+  --shadow-hairline: 0 0 0 1px var(--shadow-tint-6);
+  --shadow-raised:
+    0 0 0 1px var(--shadow-tint-6), 0 1px 2px -1px var(--shadow-tint-6),
+    0 2px 4px 0 var(--shadow-tint-4);
+  --shadow-overlay:
+    0 0 0 1px var(--shadow-tint-6), 0 8px 24px -4px var(--shadow-tint-10);
+
+  --radius-sm: 4px;
+  --radius-card: 12px;
+  --radius-panel: 22px;
+  --radius-float: 28px;
+  --radius-pill: 100px;
+
+  --text-caption: 0.75rem;
+  --text-body: 1.125rem;
+  --text-body-lg: 1.25rem;
+  --text-title: 1.5rem;
+  --text-display: 2.25rem;
+
+  --ease-out-quint: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-out-quad: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 350ms;
+
+  --z-index-base: 0;
+  --z-index-nav: 100;
+  --z-index-back: 110;
+  --z-index-overlay: 200;
+  --z-index-modal: 210;
+}
+
+:root {
+  --foreground-rgb: 80, 80, 80;
+  --background-rgb: 255, 252, 243;
+  --surface-rgb: 255, 252, 243;
+  --secondary-rgb: 238, 232, 213;
+  --accent-rgb: 248, 91, 39;
+
+  --shadow-tint-4: rgba(0, 0, 0, 0.04);
+  --shadow-tint-6: rgba(0, 0, 0, 0.06);
+  --shadow-tint-10: rgba(0, 0, 0, 0.1);
+
+  --image-outline: rgba(0, 0, 0, 0.1);
+  --hairline: rgba(var(--foreground-rgb), 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-rgb: 29, 29, 29;
+    --surface-rgb: 29, 29, 29;
+    --secondary-rgb: 68, 66, 60;
+    --accent-rgb: 248, 117, 39;
+
+    --shadow-tint-4: rgba(255, 255, 255, 0.04);
+    --shadow-tint-6: rgba(255, 255, 255, 0.06);
+    --shadow-tint-10: rgba(255, 255, 255, 0.1);
+
+    --image-outline: rgba(255, 255, 255, 0.1);
+    --hairline: rgba(var(--foreground-rgb), 0.1);
+  }
+}
+
+.glass-effect {
+  background-color: rgba(var(--background-rgb), 0.8);
+  -webkit-backdrop-filter: blur(50px);
+  backdrop-filter: blur(50px);
+  color: rgb(var(--foreground-rgb));
+  box-shadow: var(--shadow-raised);
+}
